@@ -10,6 +10,8 @@ from app.db.session import Base
 
 class InvoiceStatus(enum.Enum):
     PENDING = "PENDING"
+    QUEUED = "QUEUED"
+    PROCESSED = "PROCESSED"
 
 
 class Invoice(Base):
