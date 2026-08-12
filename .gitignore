@@ -3,6 +3,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+
+*.db
+big_fake.pdf
+test.pdf
+manual_test*.py
+
+
+storage/*
+!storage/.gitkeep
+
 # C extensions
 *.so
 
