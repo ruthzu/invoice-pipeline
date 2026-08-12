@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.models.invoice import Invoice, InvoiceStatus
 from app.db.session import get_db
+from app.services.queue import enqueue_invoice
 from app.services.storage import save_uploaded_file
 
 logger = logging.getLogger(__name__)
@@ -127,10 +128,24 @@ async def upload_invoice(
         db.refresh(invoice)
         
         logger.info(f"Successfully created invoice record {file_id}")
-        
+
+        response_status = invoice.status.value
+        try:
+            enqueue_invoice(file_id)
+            invoice.status = InvoiceStatus.QUEUED
+            db.commit()
+            response_status = invoice.status.value
+        except Exception as e:
+            logger.error(
+                "Failed to enqueue invoice %s for processing: %s",
+                file_id,
+                e,
+                exc_info=True,
+            )
+
         return {
             "id": str(invoice.id),
-            "status": invoice.status.value
+            "status": response_status,
         }
         
     except Exception as e:
