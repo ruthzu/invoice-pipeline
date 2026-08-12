@@ -10,6 +10,9 @@ test.pdf
 manual_test*.py
 
 
+storage/*
+!storage/.gitkeep
+
 # C extensions
 *.so
 
