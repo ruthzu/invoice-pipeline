@@ -9,6 +9,7 @@ big_fake.pdf
 test.pdf
 manual_test*.py
 
+LATER.md
 
 storage/*
 !storage/.gitkeep
