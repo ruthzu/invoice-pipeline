@@ -5,6 +5,14 @@ from pydantic import BaseModel, Field
 ConfidenceLevel = Literal["high", "medium", "low"]
 
 
+class ConfidenceScores(BaseModel):
+    vendor_name: ConfidenceLevel = "low"
+    invoice_number: ConfidenceLevel = "low"
+    invoice_date: ConfidenceLevel = "low"
+    total_amount: ConfidenceLevel = "low"
+    line_items: ConfidenceLevel = "low"
+
+
 class LineItem(BaseModel):
     description: str
     quantity: float
@@ -17,8 +25,8 @@ class InvoiceExtraction(BaseModel):
     invoice_date: str | None = None
     total_amount: float | None = None
     line_items: list[LineItem] = Field(default_factory=list)
-    confidence_scores: dict[str, ConfidenceLevel] = Field(
-        default_factory=dict,
+    confidence_scores: ConfidenceScores = Field(
+        default_factory=ConfidenceScores,
         description=(
             "Self-reported confidence for each top-level field "
             "(vendor_name, invoice_number, invoice_date, total_amount, "
