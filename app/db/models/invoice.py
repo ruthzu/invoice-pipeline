@@ -1,7 +1,7 @@
 import enum
 from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, Enum, JSON, String, Text
+from sqlalchemy import JSON, Column, DateTime, Enum, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.sql import func
 
@@ -25,6 +25,7 @@ class Invoice(Base):
     mime_type = Column(String, nullable=False)
     status = Column(Enum(InvoiceStatus), nullable=False, default=InvoiceStatus.PENDING)
     extracted_data = Column(JSON, nullable=True)
+    validation_errors = Column(JSON, nullable=True)
     extraction_error = Column(Text, nullable=True)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
