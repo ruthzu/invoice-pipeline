@@ -1,26 +1,15 @@
-from app.schemas.invoice_extraction import ConfidenceLevel, InvoiceExtraction
-
-TOP_LEVEL_FIELDS = (
-    "vendor_name",
-    "invoice_number",
-    "invoice_date",
-    "total_amount",
-    "line_items",
-)
+from app.schemas.invoice_extraction import ConfidenceScores, InvoiceExtraction
 
 
 def apply_heuristics(
     extraction: InvoiceExtraction,
-) -> dict[str, ConfidenceLevel]:
+) -> ConfidenceScores:
     """Apply deterministic confidence overrides to Gemini's self-report."""
-    scores = {
-        field: extraction.confidence_scores.get(field, "low")
-        for field in TOP_LEVEL_FIELDS
-    }
+    scores = extraction.confidence_scores.model_copy()
 
-    for field in TOP_LEVEL_FIELDS:
+    for field in ConfidenceScores.model_fields:
         if getattr(extraction, field) is None:
-            scores[field] = "low"
+            setattr(scores, field, "low")
 
     if extraction.line_items and extraction.total_amount is not None:
         line_items_total = sum(
@@ -28,7 +17,7 @@ def apply_heuristics(
         )
         tolerance = max(1.0, abs(extraction.total_amount) * 0.01)
         if abs(line_items_total - extraction.total_amount) > tolerance:
-            scores["line_items"] = "low"
-            scores["total_amount"] = "low"
+            scores.line_items = "low"
+            scores.total_amount = "low"
 
     return scores
