@@ -16,6 +16,7 @@ from app.db.models.invoice import Invoice, InvoiceStatus
 from app.db.session import SessionLocal
 from app.services.confidence import apply_heuristics
 from app.services.extraction import extract_invoice
+from app.services.validation import validate_invoice
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,7 @@ def process_invoice(invoice_id: str) -> None:
             return
 
         extraction.confidence_scores = apply_heuristics(extraction)
+        invoice.validation_errors = validate_invoice(extraction)
         invoice.extracted_data = extraction.model_dump()
         invoice.extraction_error = None
         invoice.status = InvoiceStatus.EXTRACTED
