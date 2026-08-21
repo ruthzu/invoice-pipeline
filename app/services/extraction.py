@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 EXTRACTION_PROMPT = (
     "Extract structured invoice data from this document. "
     "Return vendor name, invoice number, invoice date, total amount, "
-    "and line items. Use null for any field that is not present in the document."
+    "and line items. Use null for any field that is not present in the document. "
+    "Alongside the extracted values, self-report a confidence level of high, "
+    "medium, or low for each top-level field (vendor_name, invoice_number, "
+    "invoice_date, total_amount, line_items), based on how certain you are "
+    "that the extracted value is correct and present in the document."
 )
 
 MAX_ATTEMPTS = 3

@@ -84,6 +84,13 @@ def test_process_invoice_success(mock_extract, worker_setup):
     updated = db.query(Invoice).filter(Invoice.id == invoice.id).first()
     assert updated.status == InvoiceStatus.EXTRACTED
     assert updated.extracted_data["vendor_name"] == "Acme Corp"
+    assert updated.extracted_data["confidence_scores"] == {
+        "vendor_name": "low",
+        "invoice_number": "low",
+        "invoice_date": "low",
+        "total_amount": "low",
+        "line_items": "low",
+    }
     assert updated.extraction_error is None
     db.close()
     mock_extract.assert_called_once()
@@ -99,7 +106,8 @@ def test_process_invoice_extraction_failure(mock_extract, worker_setup):
     db.close()
 
     mock_extract.side_effect = ExtractionFailedError(
-        '{"error": {"code": 400, "message": "Gemini response failed schema validation"}}'
+        '{"error": {"code": 400, "message": "Gemini response failed '
+        'schema validation"}}'
     )
 
     process_invoice(invoice_id)

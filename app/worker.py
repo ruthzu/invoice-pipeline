@@ -14,6 +14,7 @@ from app.core.exceptions import (
 from app.core.redis import get_redis_connection
 from app.db.models.invoice import Invoice, InvoiceStatus
 from app.db.session import SessionLocal
+from app.services.confidence import apply_heuristics
 from app.services.extraction import extract_invoice
 
 logger = logging.getLogger(__name__)
@@ -110,6 +111,7 @@ def process_invoice(invoice_id: str) -> None:
             )
             return
 
+        extraction.confidence_scores = apply_heuristics(extraction)
         invoice.extracted_data = extraction.model_dump()
         invoice.extraction_error = None
         invoice.status = InvoiceStatus.EXTRACTED
