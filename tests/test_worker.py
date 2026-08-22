@@ -4,8 +4,6 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 from app.core.exceptions import ExtractionFailedError, ExtractionRateLimitedError
@@ -13,12 +11,7 @@ from app.db.models.invoice import Invoice, InvoiceStatus
 from app.db.session import Base
 from app.schemas.invoice_extraction import InvoiceExtraction, LineItem
 from app.worker import process_invoice
-
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_worker.db"
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+from tests.conftest import TestingSessionLocal, engine
 
 
 @pytest.fixture(scope="function")
@@ -82,7 +75,7 @@ def test_process_invoice_success(mock_extract, worker_setup):
 
     db = TestingSessionLocal()
     updated = db.query(Invoice).filter(Invoice.id == invoice.id).first()
-    assert updated.status == InvoiceStatus.EXTRACTED
+    assert updated.status == InvoiceStatus.NEEDS_REVIEW
     assert updated.extracted_data["vendor_name"] == "Acme Corp"
     assert updated.extracted_data["confidence_scores"] == {
         "vendor_name": "low",

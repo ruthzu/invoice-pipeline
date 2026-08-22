@@ -14,6 +14,10 @@ class InvoiceStatus(enum.Enum):
     PROCESSED = "PROCESSED"
     EXTRACTED = "EXTRACTED"
     EXTRACTION_FAILED = "EXTRACTION_FAILED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+    AUTO_APPROVED = "AUTO_APPROVED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
 
 
 class Invoice(Base):
@@ -27,6 +31,9 @@ class Invoice(Base):
     extracted_data = Column(JSON, nullable=True)
     validation_errors = Column(JSON, nullable=True)
     extraction_error = Column(Text, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    reviewed_by = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

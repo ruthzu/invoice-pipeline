@@ -1,61 +1,9 @@
-import io
-import os
-import tempfile
 from pathlib import Path
 from uuid import UUID
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from app.core.config import settings
 from app.db.models.invoice import Invoice
-from app.db.session import Base, get_db
-from app.main import app
-
-# Create test database
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Override dependencies
-def override_get_db():
-    try:
-        db = TestingSessionLocal()
-        yield db
-    finally:
-        db.close()
-
-app.dependency_overrides[get_db] = override_get_db
-
-client = TestClient(app)
-
-
-@pytest.fixture(scope="function")
-def setup_database():
-    """Set up test database and clean up after each test."""
-    # Create tables
-    Base.metadata.create_all(bind=engine)
-    
-    # Create temporary storage directory
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Override storage directory for tests
-        original_storage_dir = settings.storage_dir
-        settings.storage_dir = temp_dir
-        
-        yield
-        
-        # Restore original settings
-        settings.storage_dir = original_storage_dir
-    
-    # Drop tables
-    Base.metadata.drop_all(bind=engine)
-
-
-def create_test_file(content: bytes, filename: str = "test.pdf") -> io.BytesIO:
-    """Create a test file with given content."""
-    return io.BytesIO(content)
+from tests.conftest import TestingSessionLocal, client, create_test_file
 
 
 def test_upload_valid_pdf(setup_database):

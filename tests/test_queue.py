@@ -1,12 +1,7 @@
 from unittest.mock import patch
 from uuid import UUID
 
-from tests.test_invoices import (
-    TestingSessionLocal,
-    client,
-    create_test_file,
-    setup_database,
-)
+from tests.conftest import TestingSessionLocal, client, create_test_file
 
 from app.db.models.invoice import Invoice
 

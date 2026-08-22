@@ -16,6 +16,7 @@ from app.db.models.invoice import Invoice, InvoiceStatus
 from app.db.session import SessionLocal
 from app.services.confidence import apply_heuristics
 from app.services.extraction import extract_invoice
+from app.services.routing import decide_routing
 from app.services.validation import validate_invoice
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,10 @@ SKIP_STATUSES = {
     InvoiceStatus.EXTRACTED,
     InvoiceStatus.EXTRACTION_FAILED,
     InvoiceStatus.PROCESSED,
+    InvoiceStatus.NEEDS_REVIEW,
+    InvoiceStatus.AUTO_APPROVED,
+    InvoiceStatus.APPROVED,
+    InvoiceStatus.REJECTED,
 }
 
 
@@ -116,7 +121,9 @@ def process_invoice(invoice_id: str) -> None:
         invoice.validation_errors = validate_invoice(extraction)
         invoice.extracted_data = extraction.model_dump()
         invoice.extraction_error = None
-        invoice.status = InvoiceStatus.EXTRACTED
+        invoice.status = decide_routing(
+            extraction.confidence_scores, invoice.validation_errors
+        )
 
         try:
             db.commit()

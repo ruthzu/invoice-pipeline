@@ -1,8 +1,10 @@
 import logging
+from datetime import UTC, datetime
 from io import BytesIO
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -13,6 +15,11 @@ from app.services.storage import save_uploaded_file
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+REVIEWER = "mvp-reviewer"
+
+
+class RejectRequest(BaseModel):
+    reason: str | None = None
 
 # MIME type to magic bytes mapping for validation
 ALLOWED_MIME_TYPES = {
@@ -38,6 +45,67 @@ def validate_file_type(content_type: str, file_content: bytes) -> bool:
     
     magic_bytes = ALLOWED_MIME_TYPES[content_type]
     return any(file_content.startswith(magic) for magic in magic_bytes)
+
+
+@router.get("/invoices")
+def list_invoices(
+    status: InvoiceStatus | None = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(Invoice)
+    if status is not None:
+        query = query.filter(Invoice.status == status)
+
+    return [
+        {
+            "id": str(invoice.id),
+            "original_filename": invoice.original_filename,
+            "status": invoice.status.value,
+            "extracted_data": invoice.extracted_data,
+            "validation_errors": invoice.validation_errors,
+        }
+        for invoice in query.all()
+    ]
+
+
+def _get_invoice_for_review(invoice_id: UUID, db: Session) -> Invoice:
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.status != InvoiceStatus.NEEDS_REVIEW:
+        raise HTTPException(
+            status_code=409,
+            detail="Invoice does not need review",
+        )
+    return invoice
+
+
+@router.post("/invoices/{invoice_id}/approve")
+def approve_invoice(invoice_id: UUID, db: Session = Depends(get_db)):
+    invoice = _get_invoice_for_review(invoice_id, db)
+    invoice.status = InvoiceStatus.APPROVED
+    invoice.reviewed_by = REVIEWER
+    invoice.reviewed_at = datetime.now(UTC)
+    db.commit()
+    return {"id": str(invoice.id), "status": invoice.status.value}
+
+
+@router.post("/invoices/{invoice_id}/reject")
+def reject_invoice(
+    invoice_id: UUID,
+    body: RejectRequest,
+    db: Session = Depends(get_db),
+):
+    if not body.reason or not body.reason.strip():
+        raise HTTPException(status_code=400, detail="reason must be non-empty")
+
+    invoice = _get_invoice_for_review(invoice_id, db)
+    invoice.status = InvoiceStatus.REJECTED
+    invoice.rejection_reason = body.reason
+    invoice.reviewed_by = REVIEWER
+    invoice.reviewed_at = datetime.now(UTC)
+    db.commit()
+    return {"id": str(invoice.id), "status": invoice.status.value}
 
 
 @router.post("/invoices", status_code=201)
