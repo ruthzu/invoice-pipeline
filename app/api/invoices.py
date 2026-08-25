@@ -8,9 +8,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.exceptions import IllegalStatusTransitionError
 from app.db.models.invoice import Invoice, InvoiceStatus
 from app.db.session import get_db
 from app.services.queue import enqueue_invoice
+from app.services.state_machine import transition_status
 from app.services.storage import save_uploaded_file
 
 logger = logging.getLogger(__name__)
@@ -21,28 +23,29 @@ REVIEWER = "mvp-reviewer"
 class RejectRequest(BaseModel):
     reason: str | None = None
 
+
 # MIME type to magic bytes mapping for validation
 ALLOWED_MIME_TYPES = {
     "application/pdf": [b"%PDF-"],
     "image/jpeg": [b"\xff\xd8\xff"],
-    "image/png": [b"\x89PNG\r\n\x1a\n"]
+    "image/png": [b"\x89PNG\r\n\x1a\n"],
 }
 
 
 def validate_file_type(content_type: str, file_content: bytes) -> bool:
     """
     Validate file type by checking both Content-Type and magic bytes.
-    
+
     Args:
         content_type: Declared MIME type from request
         file_content: First few bytes of the file
-        
+
     Returns:
         bool: True if file type is valid, False otherwise
     """
     if content_type not in ALLOWED_MIME_TYPES:
         return False
-    
+
     magic_bytes = ALLOWED_MIME_TYPES[content_type]
     return any(file_content.startswith(magic) for magic in magic_bytes)
 
@@ -72,18 +75,19 @@ def _get_invoice_for_review(invoice_id: UUID, db: Session) -> Invoice:
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if invoice is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    if invoice.status != InvoiceStatus.NEEDS_REVIEW:
-        raise HTTPException(
-            status_code=409,
-            detail="Invoice does not need review",
-        )
     return invoice
 
 
 @router.post("/invoices/{invoice_id}/approve")
 def approve_invoice(invoice_id: UUID, db: Session = Depends(get_db)):
     invoice = _get_invoice_for_review(invoice_id, db)
-    invoice.status = InvoiceStatus.APPROVED
+    try:
+        transition_status(invoice, InvoiceStatus.APPROVED)
+    except IllegalStatusTransitionError as err:
+        raise HTTPException(
+            status_code=409,
+            detail="Invoice does not need review",
+        ) from err
     invoice.reviewed_by = REVIEWER
     invoice.reviewed_at = datetime.now(UTC)
     db.commit()
@@ -100,7 +104,13 @@ def reject_invoice(
         raise HTTPException(status_code=400, detail="reason must be non-empty")
 
     invoice = _get_invoice_for_review(invoice_id, db)
-    invoice.status = InvoiceStatus.REJECTED
+    try:
+        transition_status(invoice, InvoiceStatus.REJECTED)
+    except IllegalStatusTransitionError as err:
+        raise HTTPException(
+            status_code=409,
+            detail="Invoice does not need review",
+        ) from err
     invoice.rejection_reason = body.reason
     invoice.reviewed_by = REVIEWER
     invoice.reviewed_at = datetime.now(UTC)
@@ -110,13 +120,11 @@ def reject_invoice(
 
 @router.post("/invoices", status_code=201)
 async def upload_invoice(
-    request: Request,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)
 ):
     """
     Upload an invoice file (PDF, JPEG, or PNG).
-    
+
     Returns:
         dict: {"id": UUID, "status": "PENDING"}
     """
@@ -127,16 +135,18 @@ async def upload_invoice(
         if content_length_mb > settings.max_upload_size_mb:
             raise HTTPException(
                 status_code=413,
-                detail=f"File too large. Maximum size is {settings.max_upload_size_mb}MB"
+                detail=(
+                    f"File too large. Maximum size is {settings.max_upload_size_mb}MB"
+                ),
             )
-    
+
     # Validate declared content type
     if file.content_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=400,
-            detail="Invalid file type. Only PDF, JPEG, and PNG files are allowed"
+            detail="Invalid file type. Only PDF, JPEG, and PNG files are allowed",
         )
-    
+
     # Read file in chunks and enforce size limit while reading
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
     chunk_size = 8192
@@ -152,35 +162,43 @@ async def upload_invoice(
             if total_size > max_bytes:
                 raise HTTPException(
                     status_code=413,
-                    detail=f"File too large. Maximum size is {settings.max_upload_size_mb}MB"
+                    detail=(
+                        f"File too large. Maximum size is "
+                        f"{settings.max_upload_size_mb}MB"
+                    ),
                 )
             chunks.append(chunk)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to read uploaded file: {e}")
-        raise HTTPException(status_code=400, detail="Unable to read uploaded file")
+        raise HTTPException(
+            status_code=400, detail="Unable to read uploaded file"
+        ) from e
 
     file_content = b"".join(chunks)
-    
+
     # Validate magic bytes (file signature)
     if not validate_file_type(file.content_type, file_content):
         raise HTTPException(
             status_code=400,
-            detail="File content does not match declared type. File may be corrupted or have wrong extension"
+            detail=(
+                "File content does not match declared type. "
+                "File may be corrupted or have wrong extension"
+            ),
         )
-    
+
     # Generate UUID for the file (collision-proof)
     file_id = uuid4()
-    
+
     # Save file to storage first
     try:
         file_stream = BytesIO(file_content)
         storage_path = await save_uploaded_file(file_id, file_stream, file.content_type)
     except Exception as e:
         logger.error(f"Failed to save file to storage: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save file")
-    
+        raise HTTPException(status_code=500, detail="Failed to save file") from e
+
     # Create database record after successful file write
     try:
         invoice = Invoice(
@@ -188,19 +206,19 @@ async def upload_invoice(
             original_filename=file.filename or "unknown",
             storage_path=storage_path,
             mime_type=file.content_type,
-            status=InvoiceStatus.PENDING
+            status=InvoiceStatus.PENDING,
         )
-        
+
         db.add(invoice)
         db.commit()
         db.refresh(invoice)
-        
+
         logger.info(f"Successfully created invoice record {file_id}")
 
         response_status = invoice.status.value
         try:
             enqueue_invoice(file_id)
-            invoice.status = InvoiceStatus.QUEUED
+            transition_status(invoice, InvoiceStatus.QUEUED)
             db.commit()
             response_status = invoice.status.value
         except Exception as e:
@@ -215,7 +233,7 @@ async def upload_invoice(
             "id": str(invoice.id),
             "status": response_status,
         }
-        
+
     except Exception as e:
         # File is already written, log orphaned file situation
         logger.error(
@@ -223,4 +241,6 @@ async def upload_invoice(
             f"Orphaned file exists at storage path. Error: {e}"
         )
         db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to create invoice record")
+        raise HTTPException(
+            status_code=500, detail="Failed to create invoice record"
+        ) from e

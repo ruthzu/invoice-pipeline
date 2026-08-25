@@ -54,7 +54,9 @@ def main() -> int:
     if hf_token:
         print("Using HF_TOKEN from environment", file=sys.stderr)
     else:
-        print("Warning: HF_TOKEN not set (slower downloads, rate limits)", file=sys.stderr)
+        print(
+            "Warning: HF_TOKEN not set (slower downloads, rate limits)", file=sys.stderr
+        )
 
     print("Loading CORD-v2 dataset...", file=sys.stderr)
     dataset = load_dataset(
@@ -66,7 +68,8 @@ def main() -> int:
 
     if args.index >= len(dataset):
         print(
-            f"Error: index {args.index} out of range (dataset has {len(dataset)} items)",
+            f"Error: index {args.index} out of range "
+            f"(dataset has {len(dataset)} items)",
             file=sys.stderr,
         )
         return 1
@@ -77,7 +80,7 @@ def main() -> int:
 
     for idx in range(args.index, end_index):
         item = dataset[idx]
-        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"\n{'=' * 60}", file=sys.stderr)
         print(f"Processing receipt {idx}...", file=sys.stderr)
 
         if args.show_image_info:
@@ -102,7 +105,7 @@ def main() -> int:
             print(f"✗ Receipt {idx} extraction failed: {exc}", file=sys.stderr)
             error_count += 1
 
-    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"\n{'=' * 60}", file=sys.stderr)
     print(
         f"Summary: {success_count} succeeded, {error_count} failed",
         file=sys.stderr,

@@ -21,9 +21,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     for status in ("NEEDS_REVIEW", "AUTO_APPROVED", "APPROVED", "REJECTED"):
-        op.execute(
-            f"ALTER TYPE invoicestatus ADD VALUE IF NOT EXISTS '{status}'"
-        )
+        op.execute(f"ALTER TYPE invoicestatus ADD VALUE IF NOT EXISTS '{status}'")
 
     op.add_column("invoices", sa.Column("rejection_reason", sa.Text(), nullable=True))
     op.add_column("invoices", sa.Column("reviewed_by", sa.Text(), nullable=True))

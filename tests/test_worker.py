@@ -119,9 +119,7 @@ def test_process_invoice_extraction_failure(mock_extract, worker_setup):
 def test_process_invoice_skips_already_processed(mock_extract, worker_setup):
     temp_dir = worker_setup
     db = TestingSessionLocal()
-    invoice = _create_invoice(
-        db, status=InvoiceStatus.EXTRACTED, temp_dir=temp_dir
-    )
+    invoice = _create_invoice(db, status=InvoiceStatus.EXTRACTED, temp_dir=temp_dir)
     invoice.extracted_data = {"vendor_name": "Existing"}
     db.commit()
     invoice_id = str(invoice.id)
@@ -155,8 +153,7 @@ def test_process_invoice_file_read_failure(mock_extract, worker_setup):
     updated = db.query(Invoice).filter(Invoice.id == invoice.id).first()
     assert updated.status == InvoiceStatus.EXTRACTION_FAILED
     assert (
-        updated.extraction_error
-        == "Extraction failed: invoice file not found on disk"
+        updated.extraction_error == "Extraction failed: invoice file not found on disk"
     )
     db.close()
 
@@ -179,9 +176,7 @@ def test_process_invoice_rate_limited(mock_extract, worker_setup):
     db = TestingSessionLocal()
     updated = db.query(Invoice).filter(Invoice.id == invoice.id).first()
     assert updated.status == InvoiceStatus.EXTRACTION_FAILED
-    assert updated.extraction_error == (
-        "Extraction failed: rate limited after retries"
-    )
+    assert updated.extraction_error == ("Extraction failed: rate limited after retries")
     assert "429" not in updated.extraction_error
     assert "Resource exhausted" not in updated.extraction_error
     db.close()

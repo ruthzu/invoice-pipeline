@@ -12,9 +12,7 @@ def _extraction(**overrides) -> InvoiceExtraction:
         "invoice_number": "INV-001",
         "invoice_date": "2026-01-15",
         "total_amount": 150.0,
-        "line_items": [
-            LineItem(description="Widget", quantity=2.0, unit_price=75.0)
-        ],
+        "line_items": [LineItem(description="Widget", quantity=2.0, unit_price=75.0)],
         "confidence_scores": ConfidenceScores(
             vendor_name="high",
             invoice_number="high",

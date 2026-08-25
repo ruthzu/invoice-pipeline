@@ -14,8 +14,10 @@ def _make_response(
 ) -> MagicMock:
     response = MagicMock()
     response.parsed = extraction
-    response.text = text if text is not None else (
-        extraction.model_dump_json() if extraction else None
+    response.text = (
+        text
+        if text is not None
+        else (extraction.model_dump_json() if extraction else None)
     )
     return response
 

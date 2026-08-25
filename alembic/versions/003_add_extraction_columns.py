@@ -21,12 +21,12 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.execute("ALTER TYPE invoicestatus ADD VALUE IF NOT EXISTS 'EXTRACTED'")
-    op.execute(
-        "ALTER TYPE invoicestatus ADD VALUE IF NOT EXISTS 'EXTRACTION_FAILED'"
-    )
+    op.execute("ALTER TYPE invoicestatus ADD VALUE IF NOT EXISTS 'EXTRACTION_FAILED'")
     op.add_column(
         "invoices",
-        sa.Column("extracted_data", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "extracted_data", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
     )
     op.add_column(
         "invoices",

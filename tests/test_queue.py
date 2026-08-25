@@ -1,9 +1,8 @@
 from unittest.mock import patch
 from uuid import UUID
 
-from tests.conftest import TestingSessionLocal, client, create_test_file
-
 from app.db.models.invoice import Invoice
+from tests.conftest import TestingSessionLocal, client, create_test_file
 
 
 def test_upload_succeeds_when_redis_unreachable(setup_database):

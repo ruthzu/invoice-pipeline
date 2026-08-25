@@ -11,7 +11,6 @@ from app.db.session import Base
 class InvoiceStatus(enum.Enum):
     PENDING = "PENDING"
     QUEUED = "QUEUED"
-    PROCESSED = "PROCESSED"
     EXTRACTED = "EXTRACTED"
     EXTRACTION_FAILED = "EXTRACTION_FAILED"
     NEEDS_REVIEW = "NEEDS_REVIEW"

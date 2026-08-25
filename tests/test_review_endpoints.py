@@ -9,14 +9,12 @@ from app.core.config import settings
 from app.db.models.invoice import Invoice, InvoiceStatus
 from app.db.session import Base
 from app.main import app
-from tests.conftest import TestingSessionLocal, client, engine
+from tests.conftest import TestingSessionLocal, engine
 
 
 async def _post(path: str, json: dict | None = None) -> httpx.Response:
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(
-        transport=transport, base_url="http://test"
-    ) as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         return await client.post(path, json=json)
 
 
