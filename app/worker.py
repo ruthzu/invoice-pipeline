@@ -29,6 +29,7 @@ SKIP_STATUSES = {
     InvoiceStatus.AUTO_APPROVED,
     InvoiceStatus.APPROVED,
     InvoiceStatus.REJECTED,
+    InvoiceStatus.PROCESSING_ERROR,
 }
 
 
@@ -74,68 +75,90 @@ def process_invoice(invoice_id: str) -> None:
             return
 
         try:
-            file_bytes = _read_invoice_file(invoice)
-        except OSError as exc:
-            logger.error(
-                "Failed to read invoice file for %s: %s",
-                invoice_id,
-                exc,
-                exc_info=True,
-            )
-            _mark_extraction_failed(
-                db,
+            try:
+                file_bytes = _read_invoice_file(invoice)
+            except OSError as exc:
+                logger.error(
+                    "Failed to read invoice file for %s: %s",
+                    invoice_id,
+                    exc,
+                    exc_info=True,
+                )
+                _mark_extraction_failed(
+                    db,
+                    invoice,
+                    "Extraction failed: invoice file not found on disk",
+                    invoice_id,
+                )
+                return
+
+            try:
+                extraction = extract_invoice(file_bytes, invoice.mime_type)
+            except ExtractionRateLimitedError as exc:
+                logger.error(
+                    "Extraction rate limited for invoice %s: %s",
+                    invoice_id,
+                    exc,
+                    exc_info=True,
+                )
+                _mark_extraction_failed(
+                    db, invoice, _extraction_error_reason(exc), invoice_id
+                )
+                return
+            except ExtractionFailedError as exc:
+                logger.error(
+                    "Extraction failed for invoice %s: %s",
+                    invoice_id,
+                    exc,
+                    exc_info=True,
+                )
+                _mark_extraction_failed(
+                    db, invoice, _extraction_error_reason(exc), invoice_id
+                )
+                return
+
+            extraction.confidence_scores = apply_heuristics(extraction)
+            invoice.validation_errors = validate_invoice(extraction)
+            invoice.extracted_data = extraction.model_dump()
+            invoice.extraction_error = None
+            transition_status(
                 invoice,
-                "Extraction failed: invoice file not found on disk",
-                invoice_id,
+                decide_routing(extraction.confidence_scores, invoice.validation_errors),
             )
-            return
 
-        try:
-            extraction = extract_invoice(file_bytes, invoice.mime_type)
-        except ExtractionRateLimitedError as exc:
+            try:
+                db.commit()
+            except SQLAlchemyError as exc:
+                logger.error(
+                    "Extraction succeeded for invoice %s but DB commit failed; "
+                    "extracted data was lost on save: %s",
+                    invoice_id,
+                    exc,
+                    exc_info=True,
+                )
+                db.rollback()
+                raise
+        except Exception as exc:
             logger.error(
-                "Extraction rate limited for invoice %s: %s",
+                "Unexpected processing failure for invoice %s: %s",
                 invoice_id,
                 exc,
                 exc_info=True,
             )
-            _mark_extraction_failed(
-                db, invoice, _extraction_error_reason(exc), invoice_id
-            )
-            return
-        except ExtractionFailedError as exc:
-            logger.error(
-                "Extraction failed for invoice %s: %s",
-                invoice_id,
-                exc,
-                exc_info=True,
-            )
-            _mark_extraction_failed(
-                db, invoice, _extraction_error_reason(exc), invoice_id
-            )
-            return
-
-        extraction.confidence_scores = apply_heuristics(extraction)
-        invoice.validation_errors = validate_invoice(extraction)
-        invoice.extracted_data = extraction.model_dump()
-        invoice.extraction_error = None
-        transition_status(
-            invoice,
-            decide_routing(extraction.confidence_scores, invoice.validation_errors),
-        )
-
-        try:
-            db.commit()
-        except SQLAlchemyError as exc:
-            logger.error(
-                "Extraction succeeded for invoice %s but DB commit failed; "
-                "extracted data was lost on save: %s",
-                invoice_id,
-                exc,
-                exc_info=True,
-            )
-            db.rollback()
-            raise
+            try:
+                transition_status(invoice, InvoiceStatus.PROCESSING_ERROR)
+                db.commit()
+            except Exception as commit_exc:
+                logger.error(
+                    "Failed to record PROCESSING_ERROR status for invoice %s "
+                    "after unexpected failure — invoice may be stuck. "
+                    "Original error: %s. Commit error: %s",
+                    invoice_id,
+                    exc,
+                    commit_exc,
+                    exc_info=True,
+                )
+                db.rollback()
     finally:
         db.close()
 

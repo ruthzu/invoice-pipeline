@@ -26,6 +26,7 @@ def test_every_legal_transition_succeeds():
         (InvoiceStatus.AUTO_APPROVED, InvoiceStatus.APPROVED),
         (InvoiceStatus.APPROVED, InvoiceStatus.REJECTED),
         (InvoiceStatus.REJECTED, InvoiceStatus.NEEDS_REVIEW),
+        (InvoiceStatus.PROCESSING_ERROR, InvoiceStatus.QUEUED),
     ],
 )
 def test_illegal_transition_raises_with_both_statuses(
@@ -37,3 +38,15 @@ def test_illegal_transition_raises_with_both_statuses(
     message = str(exc_info.value)
     assert current_status.value in message
     assert new_status.value in message
+
+
+def test_queued_to_processing_error_is_legal():
+    invoice = _invoice(InvoiceStatus.QUEUED)
+
+    transition_status(invoice, InvoiceStatus.PROCESSING_ERROR)
+
+    assert invoice.status == InvoiceStatus.PROCESSING_ERROR
+
+
+def test_processing_error_is_terminal():
+    assert LEGAL_TRANSITIONS[InvoiceStatus.PROCESSING_ERROR] == set()

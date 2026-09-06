@@ -17,6 +17,7 @@ class InvoiceStatus(enum.Enum):
     AUTO_APPROVED = "AUTO_APPROVED"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+    PROCESSING_ERROR = "PROCESSING_ERROR"
 
 
 class Invoice(Base):

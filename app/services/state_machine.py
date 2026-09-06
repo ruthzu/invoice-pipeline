@@ -7,12 +7,14 @@ LEGAL_TRANSITIONS: dict[InvoiceStatus, set[InvoiceStatus]] = {
         InvoiceStatus.NEEDS_REVIEW,
         InvoiceStatus.AUTO_APPROVED,
         InvoiceStatus.EXTRACTION_FAILED,
+        InvoiceStatus.PROCESSING_ERROR,
     },
     InvoiceStatus.NEEDS_REVIEW: {InvoiceStatus.APPROVED, InvoiceStatus.REJECTED},
     InvoiceStatus.EXTRACTION_FAILED: set(),
     InvoiceStatus.AUTO_APPROVED: set(),
     InvoiceStatus.APPROVED: set(),
     InvoiceStatus.REJECTED: set(),
+    InvoiceStatus.PROCESSING_ERROR: set(),
 }
 
 

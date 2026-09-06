@@ -180,3 +180,30 @@ def test_process_invoice_rate_limited(mock_extract, worker_setup):
     assert "429" not in updated.extraction_error
     assert "Resource exhausted" not in updated.extraction_error
     db.close()
+
+
+@patch("app.worker.apply_heuristics")
+@patch("app.worker.extract_invoice")
+@patch("app.worker.SessionLocal", TestingSessionLocal)
+def test_process_invoice_unexpected_failure_is_terminal(
+    mock_extract, mock_apply_heuristics, worker_setup
+):
+    temp_dir = worker_setup
+    db = TestingSessionLocal()
+    invoice = _create_invoice(db, temp_dir=temp_dir)
+    invoice_id = str(invoice.id)
+    db.close()
+
+    mock_extract.return_value = InvoiceExtraction(
+        vendor_name="Acme Corp",
+        invoice_number="INV-001",
+        line_items=[LineItem(description="Widget", quantity=1.0, unit_price=10.0)],
+    )
+    mock_apply_heuristics.side_effect = RuntimeError("unexpected processing bug")
+
+    process_invoice(invoice_id)
+
+    db = TestingSessionLocal()
+    updated = db.query(Invoice).filter(Invoice.id == invoice.id).first()
+    assert updated.status == InvoiceStatus.PROCESSING_ERROR
+    db.close()
