@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools==74.1.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,23 +9,23 @@ description = "FastAPI service for invoice processing"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.104.0",
-    "uvicorn[standard]>=0.24.0",
-    "sqlalchemy>=2.0.0",
-    "alembic>=1.12.0",
-    "psycopg[binary]>=3.1.0",
-    "pydantic-settings>=2.0.0",
-    "python-multipart>=0.0.6",
-    "rq>=1.15.0",
-    "google-genai>=1.0.0",
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.52.4",
+    "sqlalchemy==2.0.52",
+    "alembic==1.19.1",
+    "psycopg[binary]==3.3.5",
+    "pydantic-settings==2.15.0",
+    "python-multipart==0.0.32",
+    "rq==2.12.0",
+    "google-genai==2.22.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.1.0",
-    "datasets>=2.0.0",
-    "pillow>=10.0.0",
-    "python-dotenv>=1.0.0",
+    "ruff==0.16.2",
+    "datasets==5.0.1",
+    "pillow==11.1.0",
+    "python-dotenv==1.2.2",
 ]
 
 [tool.ruff]
@@ -53,4 +53,3 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
-
