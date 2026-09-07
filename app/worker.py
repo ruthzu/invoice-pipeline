@@ -1,4 +1,5 @@
 import logging
+import time
 from pathlib import Path
 from uuid import UUID
 
@@ -56,22 +57,38 @@ def _mark_extraction_failed(db, invoice: Invoice, reason: str, invoice_id: str) 
             invoice_id,
             exc,
             exc_info=True,
+            extra={
+                "invoice_id": invoice_id,
+                "status": InvoiceStatus.EXTRACTION_FAILED.value,
+            },
         )
         db.rollback()
         raise
 
 
 def process_invoice(invoice_id: str) -> None:
-    logger.info("Received invoice job for invoice id=%s", invoice_id)
+    logger.info(
+        "Received invoice job for invoice id=%s",
+        invoice_id,
+        extra={"invoice_id": invoice_id, "status": "received"},
+    )
     db = SessionLocal()
     try:
         invoice = db.query(Invoice).filter(Invoice.id == UUID(invoice_id)).first()
         if invoice is None:
-            logger.error("Invoice %s not found", invoice_id)
+            logger.error(
+                "Invoice %s not found",
+                invoice_id,
+                extra={"invoice_id": invoice_id, "status": "not_found"},
+            )
             return
 
         if invoice.status in SKIP_STATUSES:
-            logger.info("Invoice %s already processed, skipping", invoice_id)
+            logger.info(
+                "Invoice %s already processed, skipping",
+                invoice_id,
+                extra={"invoice_id": invoice_id, "status": invoice.status.value},
+            )
             return
 
         try:
@@ -83,6 +100,7 @@ def process_invoice(invoice_id: str) -> None:
                     invoice_id,
                     exc,
                     exc_info=True,
+                    extra={"invoice_id": invoice_id, "status": "file_read_failed"},
                 )
                 _mark_extraction_failed(
                     db,
@@ -92,6 +110,7 @@ def process_invoice(invoice_id: str) -> None:
                 )
                 return
 
+            extraction_started = time.monotonic()
             try:
                 extraction = extract_invoice(file_bytes, invoice.mime_type)
             except ExtractionRateLimitedError as exc:
@@ -100,6 +119,10 @@ def process_invoice(invoice_id: str) -> None:
                     invoice_id,
                     exc,
                     exc_info=True,
+                    extra={
+                        "invoice_id": invoice_id,
+                        "status": InvoiceStatus.EXTRACTION_FAILED.value,
+                    },
                 )
                 _mark_extraction_failed(
                     db, invoice, _extraction_error_reason(exc), invoice_id
@@ -111,12 +134,20 @@ def process_invoice(invoice_id: str) -> None:
                     invoice_id,
                     exc,
                     exc_info=True,
+                    extra={
+                        "invoice_id": invoice_id,
+                        "status": InvoiceStatus.EXTRACTION_FAILED.value,
+                    },
                 )
                 _mark_extraction_failed(
                     db, invoice, _extraction_error_reason(exc), invoice_id
                 )
                 return
 
+            extraction_duration_ms = round(
+                (time.monotonic() - extraction_started) * 1000
+            )
+            invoice.extraction_duration_ms = extraction_duration_ms
             extraction.confidence_scores = apply_heuristics(extraction)
             invoice.validation_errors = validate_invoice(extraction)
             invoice.extracted_data = extraction.model_dump()
@@ -135,15 +166,29 @@ def process_invoice(invoice_id: str) -> None:
                     invoice_id,
                     exc,
                     exc_info=True,
+                    extra={
+                        "invoice_id": invoice_id,
+                        "status": "db_commit_failed",
+                    },
                 )
                 db.rollback()
                 raise
+            logger.info(
+                "Successfully extracted invoice %s",
+                invoice_id,
+                extra={
+                    "invoice_id": invoice_id,
+                    "status": invoice.status.value,
+                    "extraction_duration_ms": extraction_duration_ms,
+                },
+            )
         except Exception as exc:
             logger.error(
                 "Unexpected processing failure for invoice %s: %s",
                 invoice_id,
                 exc,
                 exc_info=True,
+                extra={"invoice_id": invoice_id, "status": "processing_error"},
             )
             try:
                 transition_status(invoice, InvoiceStatus.PROCESSING_ERROR)
@@ -157,6 +202,10 @@ def process_invoice(invoice_id: str) -> None:
                     exc,
                     commit_exc,
                     exc_info=True,
+                    extra={
+                        "invoice_id": invoice_id,
+                        "status": InvoiceStatus.PROCESSING_ERROR.value,
+                    },
                 )
                 db.rollback()
     finally:

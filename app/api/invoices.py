@@ -91,6 +91,11 @@ def approve_invoice(invoice_id: UUID, db: Session = Depends(get_db)):
     invoice.reviewed_by = REVIEWER
     invoice.reviewed_at = datetime.now(UTC)
     db.commit()
+    logger.info(
+        "Approved invoice %s",
+        invoice_id,
+        extra={"invoice_id": str(invoice_id), "status": InvoiceStatus.APPROVED.value},
+    )
     return {"id": str(invoice.id), "status": invoice.status.value}
 
 
@@ -115,6 +120,15 @@ def reject_invoice(
     invoice.reviewed_by = REVIEWER
     invoice.reviewed_at = datetime.now(UTC)
     db.commit()
+    logger.info(
+        "Rejected invoice %s",
+        invoice_id,
+        extra={
+            "invoice_id": str(invoice_id),
+            "status": InvoiceStatus.REJECTED.value,
+            "reason": body.reason,
+        },
+    )
     return {"id": str(invoice.id), "status": invoice.status.value}
 
 
@@ -171,7 +185,10 @@ async def upload_invoice(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to read uploaded file: {e}")
+        logger.error(
+            f"Failed to read uploaded file: {e}",
+            extra={"status": "file_read_failed"},
+        )
         raise HTTPException(
             status_code=400, detail="Unable to read uploaded file"
         ) from e
@@ -196,7 +213,10 @@ async def upload_invoice(
         file_stream = BytesIO(file_content)
         storage_path = await save_uploaded_file(file_id, file_stream, file.content_type)
     except Exception as e:
-        logger.error(f"Failed to save file to storage: {e}")
+        logger.error(
+            f"Failed to save file to storage: {e}",
+            extra={"status": "storage_save_failed"},
+        )
         raise HTTPException(status_code=500, detail="Failed to save file") from e
 
     # Create database record after successful file write
@@ -213,7 +233,10 @@ async def upload_invoice(
         db.commit()
         db.refresh(invoice)
 
-        logger.info(f"Successfully created invoice record {file_id}")
+        logger.info(
+            f"Successfully created invoice record {file_id}",
+            extra={"invoice_id": str(file_id), "status": invoice.status.value},
+        )
 
         response_status = invoice.status.value
         try:
@@ -227,6 +250,7 @@ async def upload_invoice(
                 file_id,
                 e,
                 exc_info=True,
+                extra={"invoice_id": str(file_id), "status": "enqueue_failed"},
             )
 
         return {
@@ -238,7 +262,8 @@ async def upload_invoice(
         # File is already written, log orphaned file situation
         logger.error(
             f"Failed to create database record for file {storage_path}. "
-            f"Orphaned file exists at storage path. Error: {e}"
+            f"Orphaned file exists at storage path. Error: {e}",
+            extra={"invoice_id": str(file_id), "status": "database_record_failed"},
         )
         db.rollback()
         raise HTTPException(
