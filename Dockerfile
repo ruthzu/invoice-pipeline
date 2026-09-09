@@ -13,6 +13,7 @@ COPY alembic.ini .
 
 # Run the application without root privileges.
 RUN useradd --create-home --shell /usr/sbin/nologin appuser \
+    && mkdir -p /app/storage \
     && chown -R appuser:appuser /app
 USER appuser
 
