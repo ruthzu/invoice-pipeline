@@ -48,8 +48,8 @@ user system. The health and metrics endpoints are unauthenticated and should be
 gated before public exposure. There is also no CI/CD pipeline yet; tests and lint
 are run locally.
 
-## What I'd do next
+<!-- ## What I'd do next
 
 I would add CI/CD with automated tests and linting, introduce real authentication
 and reviewer accounts, and use an outbox or reconciliation pattern to make
-queueing reliable.
+queueing reliable. -->
